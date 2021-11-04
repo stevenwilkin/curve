@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"sort"
@@ -31,7 +31,7 @@ type result struct {
 	Yield      float64 `json:"yield"`
 }
 
-func getJSON(path string, params url.Values, response interface{}) {
+func getJSON(path string, params url.Values, response interface{}) error {
 	u := url.URL{
 		Scheme:   "https",
 		Host:     "www.deribit.com",
@@ -40,24 +40,28 @@ func getJSON(path string, params url.Values, response interface{}) {
 
 	resp, err := http.Get(u.String())
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	json.Unmarshal(body, &response)
+	return nil
 }
 
-func main() {
+func getYields() ([]result, error) {
 	var response instrumentsResponse
-	getJSON(
+	err := getJSON(
 		"/api/v2/public/get_instruments",
 		url.Values{"currency": {"BTC"}, "kind": {"future"}},
 		&response)
+	if err != nil {
+		return nil, err
+	}
 
 	instruments := response.Result
 	sort.Slice(instruments, func(i, j int) bool {
@@ -73,10 +77,13 @@ func main() {
 		msToExpiration := i.ExpirationTimestamp - time.Now().UnixMilli()
 
 		var response tickerResponse
-		getJSON(
+		err = getJSON(
 			"/api/v2/public/ticker",
 			url.Values{"instrument_name": {i.InstrumentName}},
 			&response)
+		if err != nil {
+			return nil, err
+		}
 
 		yield := (response.Result.MarkPrice - response.Result.IndexPrice) / response.Result.IndexPrice
 		annualisedYield := yield / (float64(msToExpiration) / (1000 * 60 * 60 * 24 * 365))
@@ -86,9 +93,27 @@ func main() {
 			Yield:      annualisedYield})
 	}
 
+	return results, nil
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	results, err := getYields()
+	if err != nil {
+		log.Println(err.Error())
+		return
+	}
+
 	j, err := json.Marshal(results)
 	if err != nil {
-		panic(err)
+		log.Println(err.Error())
+		return
 	}
-	fmt.Println(string(j))
+
+	w.Write(j)
+}
+
+func main() {
+	log.Println("Starting on 0.0.0.0:8080")
+	http.HandleFunc("/", handler)
+	http.ListenAndServe(":8080", nil)
 }
