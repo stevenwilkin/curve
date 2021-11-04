@@ -7,7 +7,13 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"sync"
 	"time"
+)
+
+var (
+	yields []result
+	m      sync.Mutex
 )
 
 type instrument struct {
@@ -97,22 +103,35 @@ func getYields() ([]result, error) {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	results, err := getYields()
+	m.Lock()
+	jsonYields, err := json.Marshal(yields)
+	m.Unlock()
+
 	if err != nil {
 		log.Println(err.Error())
 		return
 	}
 
-	j, err := json.Marshal(results)
-	if err != nil {
-		log.Println(err.Error())
-		return
-	}
-
-	w.Write(j)
+	w.Write(jsonYields)
 }
 
 func main() {
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+
+		for {
+			if results, err := getYields(); err != nil {
+				log.Println(err.Error())
+			} else {
+				m.Lock()
+				yields = results
+				m.Unlock()
+			}
+
+			<-ticker.C
+		}
+	}()
+
 	log.Println("Starting on 0.0.0.0:8080")
 	http.HandleFunc("/", handler)
 	http.ListenAndServe(":8080", nil)
