@@ -26,6 +26,11 @@ type tickerResponse struct {
 	} `json:"result"`
 }
 
+type result struct {
+	Expiration int64   `json:"expiration"`
+	Yield      float64 `json:"yield"`
+}
+
 func getJSON(path string, params url.Values, response interface{}) {
 	u := url.URL{
 		Scheme:   "https",
@@ -59,11 +64,12 @@ func main() {
 		return instruments[i].ExpirationTimestamp < instruments[j].ExpirationTimestamp
 	})
 
+	var results []result
+
 	for _, i := range instruments {
 		if i.InstrumentName == "BTC-PERPETUAL" {
 			continue
 		}
-		fmt.Println(i.InstrumentName)
 		msToExpiration := i.ExpirationTimestamp - time.Now().UnixMilli()
 
 		var response tickerResponse
@@ -74,6 +80,15 @@ func main() {
 
 		yield := (response.Result.MarkPrice - response.Result.IndexPrice) / response.Result.IndexPrice
 		annualisedYield := yield / (float64(msToExpiration) / (1000 * 60 * 60 * 24 * 365))
-		fmt.Printf("%.2f%%\n", annualisedYield*100)
+
+		results = append(results, result{
+			Expiration: i.ExpirationTimestamp,
+			Yield:      annualisedYield})
 	}
+
+	j, err := json.Marshal(results)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(j))
 }
