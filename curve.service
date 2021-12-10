@@ -1,0 +1,12 @@
+[Unit]
+Description=Deribit futures curve service
+
+[Service]
+ExecStart=/usr/local/bin/curve
+Type=simple
+User=curve
+Group=curve
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
