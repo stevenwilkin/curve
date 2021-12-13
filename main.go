@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -132,7 +134,12 @@ func main() {
 		}
 	}()
 
-	log.Println("Starting on 0.0.0.0:8080")
+	port := "8080"
+	if wwwPort := os.Getenv("WWW_PORT"); len(wwwPort) > 0 {
+		port = wwwPort
+	}
+
+	log.Printf("Starting on 0.0.0.0:%s\n", port)
 	http.HandleFunc("/", handler)
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
 }

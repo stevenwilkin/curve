@@ -2,6 +2,7 @@
 Description=Deribit futures curve service
 
 [Service]
+Environment="WWW_PORT=8181"
 ExecStart=/usr/local/bin/curve
 Type=simple
 User=curve
